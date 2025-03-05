@@ -91,7 +91,7 @@ def get_csv_openpose(sorted_json_files, output_csv):
     all_data = []
     valid_json_files = []
 
-    print("len body parts ", len(body_parts))
+    # print("len body parts ", len(body_parts))
 
     modified_headers = []
     for header in body_parts:
@@ -100,7 +100,6 @@ def get_csv_openpose(sorted_json_files, output_csv):
     modified_headers.append("phase")
     modified_headers.append("img_name")
     for json_file in sorted_json_files:
-        print("json_file path ", json_file)
         with open(json_file) as f:
             labels = json.load(f)
             people = labels["people"]
@@ -126,13 +125,10 @@ def get_csv_openpose(sorted_json_files, output_csv):
                     valid_json_files.append(cropped_name)
 
                     coordinates.append(cropped_name)
-                    print("len coordinates: ", len(coordinates))
                     all_data.append(coordinates)
 
     with open(output_csv, 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile)
-        print("headers: ", modified_headers, "len headers:",
-              len(modified_headers))
         csvwriter.writerow(modified_headers)
         for coordinates in all_data:
             csvwriter.writerow(coordinates)
@@ -331,34 +327,42 @@ def add_neck_knee_dist(df, output_folder):
     df.to_csv(output_folder, index=False)
 
 
-if __name__ == '__main__':
-    # STEPS
-
-    base_folder = "json_data/gs_training_fps10_sorted_json"
-    output_csv = "gs_training_fps10.csv" # todo remove word 'frames' in gs_training_fps5.csv
+def build_dataset(coordinates_path):
+    # print("coordinates_path from build_dataset", coordinates_path)
+    # coordinates_path = "json_data/gs_training_fps10_sorted_json" # todo remove 'sorted' from folder name
+    output_csv_path = "gs_training_fps10.csv" # todo remove word 'frames' in gs_training_fps5.csv
+    # todo save to csv folder, like csv/gs_training_fps10.csv
+    # todo extract csv names from coordinates_path
     # 1. sort json files in numeric order to reconstruct the initial frames sequence
-    sorted_json_files = get_sorted_json_files(base_folder)
+    sorted_json_files = get_sorted_json_files(coordinates_path)
     # 2. write the coordinates and labels to csv
-    get_csv_openpose(sorted_json_files, output_csv)
+    get_csv_openpose(sorted_json_files, output_csv_path)
 
     # check turn transitions
     # print(count_turn_transitions(output_csv))
 
-    output_csv_scaled_b_b = "gs_training_fps10_scaled_b_b.csv"
-    output_csv_scaled_b_b_neck  = "gs_training_fps10_scaled_b_b_neck.csv"
-    output_csv_scaled_b_b_neck_knee_dist = "gs_training_fps10_scaled_b_b_neck_knee_dist.csv"
+    output_csv_scaled_b_b_path = "gs_training_fps10_scaled_b_b.csv"
+    output_csv_scaled_b_b_neck_path = "gs_training_fps10_scaled_b_b_neck.csv"
+    output_csv_scaled_b_b_neck_knee_dist_path = "gs_training_fps10_scaled_b_b_neck_knee_dist.csv"
 
     # 3. scale coordinates using bounding box
     df = pd.read_csv("gs_training_fps10.csv")
-    scale_b_b(df, output_csv_scaled_b_b)
+    scale_b_b(df, output_csv_scaled_b_b_path)
 
     # 4. move the coordinates centre to the neck coordinate
-    df = pd.read_csv(output_csv_scaled_b_b)
-    scale_neck(df, output_csv_scaled_b_b_neck)
+    df = pd.read_csv(output_csv_scaled_b_b_path)
+    scale_neck(df, output_csv_scaled_b_b_neck_path)
 
     # 5. add a new feature - the distance between neck and knees
-    df = pd.read_csv(output_csv_scaled_b_b_neck)
-    add_neck_knee_dist(df, output_csv_scaled_b_b_neck_knee_dist)
+    df = pd.read_csv(output_csv_scaled_b_b_neck_path)
+    add_neck_knee_dist(df, output_csv_scaled_b_b_neck_knee_dist_path)
+    return output_csv_scaled_b_b_neck_knee_dist_path
+
+
+# if __name__ == '__main__':
+    # STEPS
+
+
 
 
 
