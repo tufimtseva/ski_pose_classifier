@@ -1,36 +1,27 @@
-import keras
 import pandas as pd
 import numpy as np
 
-from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay, f1_score
-from sklearn.model_selection import RandomizedSearchCV, train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score, \
+    f1_score
+from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
-import torch.optim as optim
-from scipy.stats import randint
-import seaborn as sns
 
-from sklearn.tree import export_graphviz
-from PIL import Image
-import graphviz
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import joblib
-import os
 
 import torch.utils.data as data
 from torch.utils.data import Dataset, DataLoader
-from torch.nn import functional as F
- # todo check if needed keras
+# todo check if needed keras
 
-from ml_model.lstm_classifier import LSTMClassifier
+from backend.ml_model.lstm_classifier import LSTMClassifier
 # from ml_model.mlp_classifier import MLPClassifier
 
 class SkiPoseClassifier:
     def __init__(self, training_coordinates_path):
         self.training_coordinates_path = training_coordinates_path
-        self.lstm_path = "saved_lstm.pth"
-        self.mlp_path = "saved_mlp.pkl"
+        self.lstm_path = "backend/saved_lstm.pth"
+        self.mlp_path = "backend/saved_mlp.pkl"
         # self.lstm_path = lstm_path
         # self.mlp_path = mlp_path
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -39,6 +30,7 @@ class SkiPoseClassifier:
         self.num_layers = 1
         self.output_dim = 3
         self.batch_size = 32
+
 
 
     def __load_data(self, source_path):
@@ -60,12 +52,23 @@ class SkiPoseClassifier:
     def __preprocess_training_data(self, shuffle):
         X, y, img_names = self.__load_data(self.training_coordinates_path)
 
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.15, random_state=1, shuffle=shuffle)
-        X_train, X_val, y_train, y_val = train_test_split(
-            X_train, y_train, test_size=0.176, random_state=1,
+        # X_train, X_test, y_train, y_test = train_test_split(
+        #     X, y, test_size=0.15, random_state=1, shuffle=shuffle)
+        # X_train, X_val, y_train, y_val = train_test_split(
+        #     X_train, y_train, test_size=0.176, random_state=1,
+        #     shuffle=shuffle)
+        # return X_train, y_train, X_val, y_val, X_test, y_test, img_names
+
+        # Split X, y, and img_names into train and test sets
+        X_train, X_test, y_train, y_test, img_names_train, img_names_test = train_test_split(
+            X, y, img_names, test_size=0.15, random_state=1, shuffle=shuffle)
+
+        # Split X_train, y_train, and img_names_train into train and validation sets
+        X_train, X_val, y_train, y_val, img_names_train, img_names_val = train_test_split(
+            X_train, y_train, img_names_train, test_size=0.176, random_state=1,
             shuffle=shuffle)
-        return X_train, y_train, X_val, y_val, X_test, y_test, img_names
+
+        return np.array(X_train), np.array(y_train), np.array(X_val), np.array(y_val), np.array(X_test), np.array(y_test), np.array(img_names_train), np.array(img_names_val), np.array(img_names_test)
 
     def __calculate_metrics(self, y_test, y_pred):
         accuracy = accuracy_score(y_test, y_pred)
@@ -172,11 +175,16 @@ class SkiPoseClassifier:
         # print("Log Probabilities Shape:", log_probs.shape)
         # return log_probs
     def __create_lstm_dataset(self, logits, labels, img_names, lookback):
+        # run_starts = [21, 86, 175, 243, 342, 421, 509, 589, 640, 688, 739, 811,
+        #               893, 947, 1034, 1100, 1144] # todo use these indices with real indice of logits
         X, y = [], []
         target_img_names = []
         for i in range(len(logits) - lookback):
             inputs = logits[i: i + lookback]
             target = labels[i + lookback]
+            # if any(start >= i and start <= i + lookback for start in
+            #        run_starts):
+            #     continue
             target_img_names.append(img_names[i + lookback])
             X.append(inputs)
             y.append(target)
@@ -278,7 +286,7 @@ class SkiPoseClassifier:
             # self.lstm = joblib.load(self.lstm_path)
         self.lstm = LSTMClassifier(input_dim=3, hidden_dim=128,
                                    num_layers=1, output_dim=3,
-                                   batch_size=32, device=self.device)
+                                   batch_size=self.batch_size, device=self.device)
         self.lstm.load_state_dict(
             torch.load(self.lstm_path, map_location=self.device))
         self.lstm.to(self.device)
@@ -287,47 +295,56 @@ class SkiPoseClassifier:
 
 
     def train(self):
-        X_train, y_train, X_val, y_val, X_test, y_test, img_names = self.__preprocess_training_data(shuffle=True)
+        X_train, y_train, X_val, y_val, X_test, y_test, img_names_train, img_names_val, img_names_test = self.__preprocess_training_data(shuffle=True)
         self.__train_mlp(X_train, y_train, X_val, y_val)
 
         joblib.dump(self.mlp, self.mlp_path)
         print(f"MLP model saved to {self.mlp_path}")
         # torch.save(self.mlp.st), self.lstm_path)
 
-        X_train, y_train, X_val, y_val, X_test, y_test, img_names = self.__preprocess_training_data(shuffle=False)
+        X_train, y_train, X_val, y_val, X_test, y_test, img_names_train, img_names_val, img_names_test = self.__preprocess_training_data(shuffle=False)
+        # print("img_names_train:\n")
+        # for i in img_names_train:
+        #     print(i)
+        # print("-------------------------")
+        # print("img_names_val:\n")
+        # for i in img_names_val:
+        #     print(i)
+        # print("-------------------------")
+        # print("img_names_test:\n")
+        # for i in img_names_test:
+        #     print(i)
 
         logits_train = self.__classify_mlp(X_train)
 
         features, targets, target_img_names = self.__create_lstm_dataset(
-            logits_train, y_train, img_names, lookback=10)
+            logits_train, y_train, img_names_train, lookback=10)
 
         print("LSTM Input shape:", features.shape)
         print("LSTM Target shape:", targets.shape)
 
         train_size = int(len(features) * 0.2)
-        X_val, X_train = features[:train_size], features[
-                                                train_size:]  # todo create create_lstm_dataset separately for validation
+        X_val, X_train = features[:train_size], features[train_size:]  # todo create create_lstm_dataset separately for validation
         y_val, y_train = targets[:train_size], targets[train_size:]
-        target_img_names_val, target_img_names_train = target_img_names[
-                                                       :train_size], target_img_names[
-                                                                     train_size:]
+        target_img_names_val, target_img_names_train = target_img_names[:train_size], target_img_names[train_size:]
+
         self.__train_lstm(X_train, y_train, X_val, y_val, target_img_names_val)
         torch.save(self.lstm.state_dict(), self.lstm_path)
         print(f"LSTM model saved to {self.lstm_path}")
 
 
-    def __classify_lstm(self, X, img_names):
+    def __classify_lstm(self, X):
         if self.lstm is None:
             raise ValueError("LSTM model not loaded")
 
-        X = np.array(X)
+        # X = np.array(X)
         X_lstm_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
-        img_names_dataset = StringDataset(img_names)
+        # img_names_dataset = StringDataset(img_names)
         data_loader = DataLoader(data.TensorDataset(X_lstm_tensor),
                                   shuffle=False, batch_size=self.batch_size,
                                   drop_last=True)
-        img_names_loader = DataLoader(img_names_dataset, batch_size=self.batch_size,
-                                      shuffle=False) # todo check if needed
+        # img_names_loader = DataLoader(img_names_dataset, batch_size=self.batch_size,
+        #                               shuffle=False) # todo check if needed
         all_probs = []
         self.lstm.eval()
         with torch.no_grad():
@@ -339,28 +356,45 @@ class SkiPoseClassifier:
 
         probs = np.concatenate(all_probs, axis=0)
         predicted_classes = np.argmax(probs, axis=1)
-        turn_names = self.le.inverse_transform(predicted_classes)
-        return turn_names
+        turn_phases = self.le.inverse_transform(predicted_classes)
+        return list(turn_phases)
+
+    def __sort_by_turn_phases(self, img_names, turn_phases):
+        classified_img_names = {'left': [], 'middle': [], 'right': []}
+
+        for img, turn in zip(img_names, turn_phases):
+            if turn in classified_img_names:
+                classified_img_names[turn].append(img)
+
+        return classified_img_names
+
+
     def classify(self, coordinates_path): # todo source_data_path or coordinates_path?
 
         self.__load_mlp_model()
         self.__load_lstm_model()
         # X, y, img_names = self.__load_data(coordinates_path)
-        X_train, y_train, X_val, y_val, X_test, y_test, img_names = self.__preprocess_training_data(
-            shuffle=True)  # todo for test purposes, use self.__load_data(coordinates_path) later later for separate csv with frames from a single video
+        X_train, y_train, X_val, y_val, X_test, y_test, img_names_train, img_names_val, img_names_test = self.__preprocess_training_data(
+            shuffle=False)  # todo for test purposes, use self.__load_data(coordinates_path) later later for separate csv with frames from a single video
+
+
+        # X, y = X_train[:21], y_train[:21]
         X, y = X_test, y_test
 
         logits = self.__classify_mlp(X)
 
-        features, targets, target_img_names = self.__create_lstm_dataset(
-            logits, y, img_names, lookback=10)
+        features, targets, img_names = self.__create_lstm_dataset(
+            logits, y, img_names_test, lookback=10)
 
         print("LSTM Input shape:", features.shape)
         print("LSTM Target shape:", targets.shape)
 
-        turn_names = self.__classify_lstm(features, target_img_names)
-        for i, p in zip(img_names, turn_names):
-            print(f"img name, predicted turn phase: {i}, {p}")
+        turn_phases = self.__classify_lstm(features)
+
+
+        return self.__sort_by_turn_phases(img_names, turn_phases)
+        # for i, p in zip(img_names, turn_names):
+        #     print(f"img name, predicted turn phase: {i}, {p}")
 
 
 

@@ -330,7 +330,7 @@ def add_neck_knee_dist(df, output_folder):
 def build_dataset(coordinates_path):
     # print("coordinates_path from build_dataset", coordinates_path)
     # coordinates_path = "json_data/gs_training_fps10_sorted_json" # todo remove 'sorted' from folder name
-    output_csv_path = "gs_training_fps10.csv" # todo remove word 'frames' in gs_training_fps5.csv
+    output_csv_path = "gs_training_fps10.csv"  # todo remove word 'frames' in gs_training_fps5.csv
     # todo save to csv folder, like csv/gs_training_fps10.csv
     # todo extract csv names from coordinates_path
     # 1. sort json files in numeric order to reconstruct the initial frames sequence

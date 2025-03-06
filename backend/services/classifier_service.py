@@ -1,5 +1,5 @@
-from data_preprocessing import dataset_builder
-from ml_model.model_training import SkiPoseClassifier
+from backend.data_preprocessing import dataset_builder
+from backend.ml_model.model_training import SkiPoseClassifier
 
 
 
@@ -18,7 +18,7 @@ class ClassifierService: # todo rename to ml service?
     def classify_images(self, test_coordinates_path):
         dataset_path = dataset_builder.build_dataset(test_coordinates_path)
         # classifier = SkiPoseClassifier(dataset_path)
-        self.ski_pose_classifier.classify(dataset_path)
+        return self.ski_pose_classifier.classify(dataset_path)
 
 
 
