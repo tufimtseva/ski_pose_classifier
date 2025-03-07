@@ -7,7 +7,7 @@ import numpy as np
 import cv2
 
 
-def get_sorted_json_files(base_folder):
+def get_sorted_json_files(base_folder): # todo make similar function for testing without splitting in left, right, middle subfolders
     """
     Collects and sorts JSON file paths from 'left', 'right', and 'middle' subfolders
     based on frame numbers.
