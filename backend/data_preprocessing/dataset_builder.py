@@ -7,7 +7,11 @@ import numpy as np
 import cv2
 
 
-def get_sorted_json_files(base_folder): # todo make similar function for testing without splitting in left, right, middle subfolders
+JSON_DIR = "backend/data_preprocessing/json_data"
+CSV_DIR = "backend/data_preprocessing/csv_data"
+
+
+def get_sorted_json_files_train(base_folder): # todo make similar function for testing without splitting in left, right, middle subfolders
     """
     Collects and sorts JSON file paths from 'left', 'right', and 'middle' subfolders
     based on frame numbers.
@@ -38,6 +42,22 @@ def get_sorted_json_files(base_folder): # todo make similar function for testing
     return [file_path for _, file_path in json_files]
 
 
+def get_sorted_json_files_test(base_folder):
+
+    json_files = []
+    pattern = re.compile(r'frame_(\d+)_keypoints\.json')
+    for file in os.listdir(base_folder):
+        match = pattern.match(file)
+        if match:
+            frame_number = int(match.group(1))
+            file_path = os.path.join(base_folder, file)
+            if not is_empty_json(file_path):
+                json_files.append((frame_number, file_path))
+
+    json_files.sort(key=lambda x: x[0])
+
+    return [file_path for _, file_path in json_files]
+
 def is_empty_json(file_path):
     """
     Checks if a JSON file is empty.
@@ -58,7 +78,7 @@ def is_empty_json(file_path):
         return True
 
 
-def get_csv_openpose(sorted_json_files, output_csv):
+def get_csv_openpose_train(sorted_json_files, output_csv):
     # todo add description
     body_parts = [
         "Nose",
@@ -90,9 +110,6 @@ def get_csv_openpose(sorted_json_files, output_csv):
 
     all_data = []
     valid_json_files = []
-
-    # print("len body parts ", len(body_parts))
-
     modified_headers = []
     for header in body_parts:
         modified_headers.append(header + "_x")
@@ -109,7 +126,7 @@ def get_csv_openpose(sorted_json_files, output_csv):
                 to_delete = False
                 for i in range(0, len(pose_keypoints), 3):
                     # if not (pose_keypoints[i] == 0 or pose_keypoints[
-                    #     i + 1] == 0):
+                    #     i + 1] == 0): #todo check this condition
                     coordinates.append(pose_keypoints[i])
                     coordinates.append(pose_keypoints[i + 1])
                     # else:
@@ -135,6 +152,77 @@ def get_csv_openpose(sorted_json_files, output_csv):
 
     return valid_json_files
 
+
+def get_csv_openpose_test(sorted_json_files, output_csv):
+    # todo add description
+    body_parts = [
+        "Nose",
+        "Neck",
+        "RShoulder",
+        "RElbow",
+        "RWrist",
+        "LShoulder",
+        "LElbow",
+        "LWrist",
+        "MidHip",
+        "RHip",
+        "RKnee",
+        "RAnkle",
+        "LHip",
+        "LKnee",
+        "LAnkle",
+        "REye",
+        "LEye",
+        "REar",
+        "LEar",
+        "LBigToe",
+        "LSmallToe",
+        "LHeel",
+        "RBigToe",
+        "RSmallToe",
+        "RHeel"
+    ]
+
+    all_data = []
+    valid_json_files = []
+    modified_headers = []
+    for header in body_parts:
+        modified_headers.append(header + "_x")
+        modified_headers.append(header + "_y")
+    modified_headers.append("img_name")
+    for json_file in sorted_json_files:
+        with open(json_file) as f:
+            labels = json.load(f)
+            people = labels["people"]
+            if len(people) != 0:
+                pose_keypoints = labels["people"][0]["pose_keypoints_2d"]
+                coordinates = []
+                to_delete = False
+                for i in range(0, len(pose_keypoints), 3):
+                    # if not (pose_keypoints[i] == 0 or pose_keypoints[
+                    #     i + 1] == 0):
+                    coordinates.append(pose_keypoints[i])
+                    coordinates.append(pose_keypoints[i + 1])
+                    # else:
+                    #     to_delete = True
+                    #     break
+
+                if not to_delete:
+
+                    base_name = os.path.basename(json_file)
+                    cropped_name = base_name.replace('_keypoints.json',
+                                                     '')
+                    valid_json_files.append(cropped_name)
+                    coordinates.append(cropped_name)
+                    all_data.append(coordinates)
+
+    with open(output_csv, 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(modified_headers)
+        for coordinates in all_data:
+            csvwriter.writerow(coordinates)
+
+    return valid_json_files
 
 def count_turn_transitions(csv_path):
     # todo add description
@@ -302,7 +390,7 @@ def scale_b_b(df, output_name):
     df.to_csv(output_name, index=False)
 
 
-def add_neck_knee_dist(df, output_folder):
+def add_neck_knee_dist(df, output_folder, train=False):
     # todo add description
     def euclidean_distance(x1, y1, x2, y2):
         return np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
@@ -321,32 +409,38 @@ def add_neck_knee_dist(df, output_folder):
 
     columns.remove('Nose_right_knee_dist')
     columns.remove('Nose_left_knee_dist')
-    columns.insert(-2, 'Nose_right_knee_dist')
-    columns.insert(-3, 'Nose_left_knee_dist')
+    if train:
+        columns.insert(-2, 'Nose_right_knee_dist')
+        columns.insert(-3, 'Nose_left_knee_dist')
+    else:
+        columns.insert(-1, 'Nose_right_knee_dist')
+        columns.insert(-2, 'Nose_left_knee_dist')
     df = df[columns]
     df.to_csv(output_folder, index=False)
 
 
-def build_dataset(coordinates_path):
-    # print("coordinates_path from build_dataset", coordinates_path)
-    # coordinates_path = "json_data/gs_training_fps10_sorted_json" # todo remove 'sorted' from folder name
-    output_csv_path = "gs_training_fps10.csv"  # todo remove word 'frames' in gs_training_fps5.csv
-    # todo save to csv folder, like csv/gs_training_fps10.csv
-    # todo extract csv names from coordinates_path
+def build_dataset(coordinates_folder_name, train=False):
+    coordinates_path = os.path.join(JSON_DIR, coordinates_folder_name)
+    csv_path = os.path.join(CSV_DIR, f"{coordinates_folder_name}.csv")
+
     # 1. sort json files in numeric order to reconstruct the initial frames sequence
-    sorted_json_files = get_sorted_json_files(coordinates_path)
+    if train:
+        sorted_json_files = get_sorted_json_files_train(coordinates_path)
+    else:
+        sorted_json_files = get_sorted_json_files_test(coordinates_path)
+
     # 2. write the coordinates and labels to csv
-    get_csv_openpose(sorted_json_files, output_csv_path)
+    if train:
+        get_csv_openpose_train(sorted_json_files, csv_path)
+    else:
+        get_csv_openpose_test(sorted_json_files, csv_path)
 
-    # check turn transitions
-    # print(count_turn_transitions(output_csv))
-
-    output_csv_scaled_b_b_path = "gs_training_fps10_scaled_b_b.csv"
-    output_csv_scaled_b_b_neck_path = "gs_training_fps10_scaled_b_b_neck.csv"
-    output_csv_scaled_b_b_neck_knee_dist_path = "gs_training_fps10_scaled_b_b_neck_knee_dist.csv"
+    output_csv_scaled_b_b_path = os.path.join(CSV_DIR, f"{coordinates_folder_name}_scaled_b_b.csv")
+    output_csv_scaled_b_b_neck_path = os.path.join(CSV_DIR,f"{coordinates_folder_name}_scaled_b_b_neck.csv")
+    output_csv_scaled_b_b_neck_knee_dist_path = os.path.join(CSV_DIR,f"{coordinates_folder_name}_scaled_b_b_neck_knee_dist.csv")
 
     # 3. scale coordinates using bounding box
-    df = pd.read_csv("gs_training_fps10.csv")
+    df = pd.read_csv(csv_path)
     scale_b_b(df, output_csv_scaled_b_b_path)
 
     # 4. move the coordinates centre to the neck coordinate
@@ -355,18 +449,12 @@ def build_dataset(coordinates_path):
 
     # 5. add a new feature - the distance between neck and knees
     df = pd.read_csv(output_csv_scaled_b_b_neck_path)
-    add_neck_knee_dist(df, output_csv_scaled_b_b_neck_knee_dist_path)
+    add_neck_knee_dist(df, output_csv_scaled_b_b_neck_knee_dist_path, train)
     return output_csv_scaled_b_b_neck_knee_dist_path
 
 
-# if __name__ == '__main__':
-    # STEPS
-
-
-
-
-
     # DRAFT
+    # STEPS
 
     # len pose_keypoints_2d 75
     # sorted_json_files = get_sorted_json_files(base_folder)

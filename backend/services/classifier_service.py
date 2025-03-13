@@ -2,22 +2,17 @@ from backend.data_preprocessing import dataset_builder
 from backend.ml_model.model_training import SkiPoseClassifier
 
 
-
-class ClassifierService: # todo rename to ml service?
-    def __init__(self, training_coordinates_path):
-        self.training_coordinates_path = training_coordinates_path
-        train_dataset_path = dataset_builder.build_dataset(self.training_coordinates_path)
+class ClassifierService:
+    def __init__(self, train_coordinates_folder):
+        # todo maybe use get_instance or flask ...
+        self.train_json_coordinates_folder = train_coordinates_folder
+        train_dataset_path = dataset_builder.build_dataset(self.train_json_coordinates_folder, train=True)
         self.ski_pose_classifier = SkiPoseClassifier(train_dataset_path) # todo check if this is the right place to instantiate
-        # self.lstm_path = "saved_lstm.pth"
-        # self.mlp_path = "saved_mlp.pkl"
 
-    def train_classifier(self): # todo pass source_data_path as argument?
-        # dataset_path = dataset_builder.build_dataset(self.training_coordinates_path)
-        # classifier = SkiPoseClassifier(dataset_path)
+    def train_classifier(self):
         self.ski_pose_classifier.train()
-    def classify_images(self, test_coordinates_path):
-        dataset_path = dataset_builder.build_dataset(test_coordinates_path)
-        # classifier = SkiPoseClassifier(dataset_path)
+    def classify_images(self, coordinates_folder_name):
+        dataset_path = dataset_builder.build_dataset(coordinates_folder_name)
         return self.ski_pose_classifier.classify(dataset_path)
 
 

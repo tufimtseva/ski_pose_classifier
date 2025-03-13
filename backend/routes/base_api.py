@@ -1,27 +1,39 @@
 from flask import Blueprint, request
 import os
 import subprocess
+import glob
+import shutil
 
 
 api_bp = Blueprint("api", __name__)
 
-ALLOWED_EXTENSIONS = ["mp4", "mov", "mkv"] # todo check allowed extensions fro ffmpeg
+ALLOWED_EXTENSIONS = ["mp4", "mov", "mkv"] # todo check allowed extensions for ffmpeg
 VIDEO_DIR = "backend/data_preprocessing/videos"
 FRAMES_DIR = "backend/data_preprocessing/frames"
+JSON_DIR = "backend/data_preprocessing/json_data"
+BATCH_SIZE = 10
 
 @api_bp.get('/')
 def home():
     return 'Flask is running!'
 
+# todo move to service
 @api_bp.post('/extract-frames')
 def extract_frames():
 
-    video_name = request.get_json()['video_name']
+    full_video_name = request.get_json()['video_name']
     fps = request.get_json()['fps']
-    video_path = os.path.join(VIDEO_DIR, video_name)
-    frames_path = os.path.join(FRAMES_DIR, f'{video_name}_fps{fps}')
 
-    # video_path, frames_path, fps = "gs_training.mp4", "gs_training_folder_fps10", 10
+    video_name = full_video_name.rsplit('.', 1)[0]
+    video_extension = full_video_name.rsplit('.', 1)[1].lower()
+    print("video_name", video_name)
+    print("video_extension", video_extension)
+
+    video_path = os.path.join(VIDEO_DIR, full_video_name)
+    frames_name = f'{video_name}_fps{fps}'
+    frames_path = os.path.join(FRAMES_DIR, frames_name)
+    print('FRAMES path', frames_path)
+
     os.makedirs(frames_path, exist_ok=True)
 
     output_pattern = os.path.join(frames_path, "frame_%04d.jpg")
@@ -32,13 +44,14 @@ def extract_frames():
     if result.returncode != 0:
         return {"errors": [result.stderr]}, 422 # todo check status codes everywhere
     else:
-        return {"frames_path": frames_path}, 201 # todo check camel case here and in frontend
+        return {"frames_name": frames_name}, 201 # todo check camel case here and in frontend
 
 @api_bp.post('/video-upload')
 def upload_video():
     video = request.files['file']
+    video_extension = video.filename.rsplit('.', 1)[1].lower()
 
-    if not video.filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS:
+    if not video_extension in ALLOWED_EXTENSIONS:
         return {"errors": ["Video format must be .mp4, .mov or .mkv"]}, 422
 
     if video.filename != "":
@@ -50,3 +63,88 @@ def upload_video():
         except Exception as err:
             return {"errors": [str(err)]}, 422
     return {"errors": ["missing filename"]}, 422 # todo chack if jsonify is needed
+
+
+@api_bp.post('/extract-keypoints')
+def extract_keypoints():
+    frames_name = request.get_json()['frames_name']
+    print("frames name received ", frames_name)
+    frames_path = os.path.join(FRAMES_DIR, frames_name)
+    output_json_path = os.path.join(JSON_DIR, frames_name)
+
+    sh_script = "./backend/routes/openpose_runner.sh"
+
+    if os.path.exists(output_json_path):
+        shutil.rmtree(output_json_path)
+    os.makedirs(output_json_path, exist_ok=True)
+    image_files = sorted(glob.glob(os.path.join(frames_path, "*.jpg")) +
+                         glob.glob(os.path.join(frames_path, "*.png")))
+
+    if not image_files:
+        return {'error': 'No images found in the directory'}, 400
+
+    for i in range(0, len(image_files), BATCH_SIZE):
+        batch_images = image_files[i:i + BATCH_SIZE]
+        print(f"Processing batch {i//BATCH_SIZE + 1}: {len(batch_images)} images")
+
+        batch_folder = os.path.join(frames_path, f"batch_{i//BATCH_SIZE}")
+        os.makedirs(batch_folder, exist_ok=True)
+
+        for img in batch_images:
+            shutil.copy(img, batch_folder)
+
+        batch_json_folder = os.path.join(output_json_path, f"batch_{i//BATCH_SIZE}")
+        os.makedirs(batch_json_folder, exist_ok=True)
+
+        args = [sh_script, batch_folder, batch_json_folder]
+        try:
+            subprocess.run(args, check=True)
+        except subprocess.CalledProcessError as e:
+            return {'errors': [f'Error during script execution: {str(e)}']}, 500
+        shutil.rmtree(batch_folder)
+
+    all_json_files = glob.glob(os.path.join(output_json_path, "batch_*", "*.json"))
+    for json_file in all_json_files:
+        shutil.move(json_file, output_json_path)
+
+    for batch_folder in glob.glob(os.path.join(output_json_path, "batch_*")):
+        shutil.rmtree(batch_folder)
+
+    return {'json_folder_name': frames_name}, 200
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ # ./build/examples/openpose/openpose.bin --image_dir backend/data_preprocessing/frames/gs_training_fps10 --write_json backend/data_preprocessing/json_data/gs_training_fps10_json_new --write_images backend/data_preprocessing/png_data/gs_training_fps10_png_new --number_people_max 1 --keypoint_scale 3
+
+ # openpose/build/examples/openpose/openpose.bin --image_dir backend/data_preprocessing/frames/gs_training_fps10 --write_json backend/data_preprocessing/json_data/gs_training_fps10_json_new --write_images backend/data_preprocessing/png_data/gs_training_fps10_png_new --number_people_max 1 --keypoint_scale 3
+
+ # ./openpose_runner.sh --image_dir data_preprocessing/frames/gs_training_fps10 --write_json backend/data_preprocessing/json_data/gs_training_fps10_json_new --write_images backend/data_preprocessing/png_data/gs_training_fps10_png_new --number_people_max 1 --keypoint_scale 3
+
+
+# ./openpose_runner.sh --image_dir backend/data_preprocessing/frames/test --write_json backend/data_preprocessing/json_data/test --write_images backend/data_preprocessing/png_data/test--number_people_max 1 --keypoint_scale 3
+
+# ./openpose_runner.sh --image_dir backend/data_preprocessing/frames/test --write_json backend/data_preprocessing/json_data/test --number_people_max 1 --keypoint_scale 3
+
+# OpenPose demo successfully finished. Total time: 157.200276 seconds. - 1 last run processing by openpose with fps 10
+
+
+
+
+# ./bin/mac/silicon/openpose.bin --image_dir "./data_preprocessing/frames/gs_run_fps5" --write_json "./data_preprocessing/json_data/gs_run_fps5" --number_people_max 1 --keypoint_scale 3 --render_pose 0 --display 0
+ # todo decide how to call openpose commands better
+
+
+
+# ./bin/mac/silicon/openpose.bin --image_dir "./data_preprocessing/frames/gs_run_fps5" --write_json "./data_preprocessing/json_data/gs_run_fps5"  --model_folder "./openpose/models/" --number_people_max 1 --keypoint_scale 3 --render_pose 0 --display 0

@@ -1,7 +1,10 @@
 import React, {useEffect, useState} from 'react'
+import {useLocation} from "react-router-dom";
 // import { Link } from "react-router-dom";
 
 const Home = () => {
+    const location = useLocation()
+
     const [imageData, setData] = useState(null);
     const [expanded, setExpanded] = useState({
         left: false,
@@ -10,12 +13,25 @@ const Home = () => {
     });
 
 
+    // json_folder_name
     useEffect(() => {
-        fetch('http://127.0.0.1:5000/ml-api/classify', {mode: 'cors'})
+        const jsonFolderName = location.state.jsonFolderName
+        console.log(jsonFolderName)
+        const requestBody = {
+            json_folder_name: jsonFolderName,
+        };
+
+        fetch('http://127.0.0.1:5000/ml-api/classify', {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(requestBody)
+        })
             .then(response => response.json())
             .then(json => setData(json))
             .catch(error => console.error(error));
-    }, []);
+    }, [location]);
 
     const toggleExpand = (folder) => {
         setExpanded((prevState) => ({
@@ -23,6 +39,8 @@ const Home = () => {
             [folder]: !prevState[folder],
         }));
     };
+
+    // todo cut images bounding box
 
 
     return (
