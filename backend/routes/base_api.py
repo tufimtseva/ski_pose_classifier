@@ -3,7 +3,7 @@ import os
 import subprocess
 import glob
 import shutil
-
+import threading
 
 api_bp = Blueprint("api", __name__)
 
@@ -17,7 +17,7 @@ BATCH_SIZE = 10
 def home():
     return 'Flask is running!'
 
-# todo move to service
+# todo move to service all the logic
 @api_bp.post('/extract-frames')
 def extract_frames():
 
@@ -66,12 +66,30 @@ def upload_video():
 
 
 @api_bp.post('/extract-keypoints')
-def extract_keypoints():
+def start_keypoints_extraction():
+
     frames_name = request.get_json()['frames_name']
     print("frames name received ", frames_name)
     frames_path = os.path.join(FRAMES_DIR, frames_name)
     output_json_path = os.path.join(JSON_DIR, frames_name)
 
+    thread = threading.Thread(target=extract_keypoints, args=(frames_path, output_json_path))
+    thread.start()
+    return {'json_folder_name': frames_name}, 200
+
+
+@api_bp.post('/extract-keypoints-info')
+def get_keypoints_extraction_info():
+    frames_name = request.get_json()['frames_name']
+    frames_path = os.path.join(FRAMES_DIR, frames_name)
+    output_json_path = os.path.join(JSON_DIR, frames_name)
+    total_cnt = sum(os.path.isfile(os.path.join(frames_path, file)) and not file.startswith('.') for file in os.listdir(frames_path))
+    processed_cnt = sum(len(files) for _, _, files in os.walk(output_json_path))
+    return {"processed_cnt": processed_cnt, "total_cnt": total_cnt, "json_folder_name": frames_name}, 200
+
+
+
+def extract_keypoints(frames_path, output_json_path):
     sh_script = "./backend/routes/openpose_runner.sh"
 
     if os.path.exists(output_json_path):
@@ -110,9 +128,7 @@ def extract_keypoints():
     for batch_folder in glob.glob(os.path.join(output_json_path, "batch_*")):
         shutil.rmtree(batch_folder)
 
-    return {'json_folder_name': frames_name}, 200
-
-
+    print(f"Extraction completed for: {frames_path}")
 
 
 

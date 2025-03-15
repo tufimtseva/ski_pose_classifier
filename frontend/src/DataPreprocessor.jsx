@@ -11,6 +11,42 @@ const DataPreprocessor = () => {
     const [coordinatesFailure, setCoordinatesFailure] = useState(null)
 
 
+    const [processedFramesCnt, setProcessedFramesCnt] = useState(null)
+    const [totalFramesCnt, setTotalFramesCnt] = useState(null)
+
+
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms))
+    }
+
+    async function checkKeypointsExtractionStatus(requestBody) {
+        fetch('http://127.0.0.1:5000/api/extract-keypoints-info', {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(requestBody)
+        })
+            .then(res => res.json())
+            .then(async json => {
+                if (json.errors) {
+                    setCoordinatesFailure(json.errors.join(", "))
+                } else {
+                    console.log("processed_cnt ", json.processed_cnt, typeof json.processed_cnt)
+                    console.log("total_cnt ", json.total_cnt, typeof json.total_cnt)
+                    if (json.processed_cnt === json.total_cnt) {
+                        setCoordinatesSuccess(json.json_folder_name)
+                    } else {
+                        setProcessedFramesCnt(json.processed_cnt)
+                        setTotalFramesCnt(json.total_cnt)
+                        await sleep(3000)
+                        checkKeypointsExtractionStatus(requestBody)
+                    }
+                }
+            })
+    }
+
+
     useEffect( () => {
         if (extractionSuccess === null)  {
             return
@@ -32,7 +68,7 @@ const DataPreprocessor = () => {
                 if (json.errors) {
                     setCoordinatesFailure(json.errors.join(", "))
                 } else {
-                    setCoordinatesSuccess(json.json_folder_name)
+                    checkKeypointsExtractionStatus(requestBody)
                 }
             })
             .catch(err => setExtractionError("An error occurred while 2d coordinates extraction."));
@@ -44,7 +80,7 @@ const DataPreprocessor = () => {
         console.log(videoName)
         const requestBody = {
             video_name: videoName,
-            fps: 10 // todo rollback to 10
+            fps: 10
         };
 
         fetch('http://127.0.0.1:5000/api/extract-frames', {
@@ -83,6 +119,10 @@ const DataPreprocessor = () => {
             </div>
             <h2>Extracting 2d coordinates...</h2>
             <div>
+                {processedFramesCnt && totalFramesCnt && !coordinatesSuccess && !coordinatesFailure && <div style={{
+                    color: "orange",
+                    marginTop: "10px"
+                }}>In progress... Processed {processedFramesCnt} out of {totalFramesCnt}</div>}
                 {coordinatesSuccess && <div style={{
                     color: "green",
                     marginTop: "10px"
@@ -92,7 +132,7 @@ const DataPreprocessor = () => {
                     marginTop: "10px"
                 }}>{coordinatesFailure}</div>}
             </div>
-            <Link to="/classification-results" state={{ jsonFolderName: coordinatesSuccess}}>Get classified images</Link>
+            {coordinatesSuccess && <Link to="/classification-results" state={{ jsonFolderName: coordinatesSuccess}}>Get classified images</Link>}
         </div>
     )
 }
