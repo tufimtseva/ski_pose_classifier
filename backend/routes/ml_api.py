@@ -51,7 +51,7 @@ def classify():
     train_json_coordinates_folder = get_train_folder()
     service = init_classifier_service(train_json_coordinates_folder)
     classified_img_names = service.classify_images(json_folder_name)
-    image_folder = os.path.join(IMAGE_DIR, json_folder_name)
+    image_folder = os.path.join(IMAGE_DIR, f"{json_folder_name}_cropped")
 
     classified_images = {
         "left": [encode_image(os.path.join(image_folder, f"{name}.jpg")) for

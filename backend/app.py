@@ -1,7 +1,7 @@
 from flask import Flask
 
 from backend.routes.base_api import api_bp
-from backend.routes.ml_api import ml_api_bp # todo remove backend part
+from backend.routes.ml_api import ml_api_bp
 from flask_cors import CORS
 
 app = Flask(__name__)

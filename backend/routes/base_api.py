@@ -129,38 +129,3 @@ def extract_keypoints(frames_path, output_json_path):
         shutil.rmtree(batch_folder)
 
     print(f"Extraction completed for: {frames_path}")
-
-
-
-
-
-
-
-
-
-
-
-
-
- # ./build/examples/openpose/openpose.bin --image_dir backend/data_preprocessing/frames/gs_training_fps10 --write_json backend/data_preprocessing/json_data/gs_training_fps10_json_new --write_images backend/data_preprocessing/png_data/gs_training_fps10_png_new --number_people_max 1 --keypoint_scale 3
-
- # openpose/build/examples/openpose/openpose.bin --image_dir backend/data_preprocessing/frames/gs_training_fps10 --write_json backend/data_preprocessing/json_data/gs_training_fps10_json_new --write_images backend/data_preprocessing/png_data/gs_training_fps10_png_new --number_people_max 1 --keypoint_scale 3
-
- # ./openpose_runner.sh --image_dir data_preprocessing/frames/gs_training_fps10 --write_json backend/data_preprocessing/json_data/gs_training_fps10_json_new --write_images backend/data_preprocessing/png_data/gs_training_fps10_png_new --number_people_max 1 --keypoint_scale 3
-
-
-# ./openpose_runner.sh --image_dir backend/data_preprocessing/frames/test --write_json backend/data_preprocessing/json_data/test --write_images backend/data_preprocessing/png_data/test--number_people_max 1 --keypoint_scale 3
-
-# ./openpose_runner.sh --image_dir backend/data_preprocessing/frames/test --write_json backend/data_preprocessing/json_data/test --number_people_max 1 --keypoint_scale 3
-
-# OpenPose demo successfully finished. Total time: 157.200276 seconds. - 1 last run processing by openpose with fps 10
-
-
-
-
-# ./bin/mac/silicon/openpose.bin --image_dir "./data_preprocessing/frames/gs_run_fps5" --write_json "./data_preprocessing/json_data/gs_run_fps5" --number_people_max 1 --keypoint_scale 3 --render_pose 0 --display 0
- # todo decide how to call openpose commands better
-
-
-
-# ./bin/mac/silicon/openpose.bin --image_dir "./data_preprocessing/frames/gs_run_fps5" --write_json "./data_preprocessing/json_data/gs_run_fps5"  --model_folder "./openpose/models/" --number_people_max 1 --keypoint_scale 3 --render_pose 0 --display 0

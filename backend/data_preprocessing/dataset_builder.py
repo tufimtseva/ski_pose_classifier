@@ -5,13 +5,17 @@ import csv
 import pandas as pd
 import numpy as np
 import cv2
+from PIL import Image
+import shutil
+
 
 
 JSON_DIR = "backend/data_preprocessing/json_data"
 CSV_DIR = "backend/data_preprocessing/csv_data"
+IMAGE_DIR = "backend/data_preprocessing/frames"
 
 
-def get_sorted_json_files_train(base_folder): # todo make similar function for testing without splitting in left, right, middle subfolders
+def get_sorted_json_files_train(base_folder):
     """
     Collects and sorts JSON file paths from 'left', 'right', and 'middle' subfolders
     based on frame numbers.
@@ -367,8 +371,7 @@ def scale_neck(df, output_name):
 
     df.to_csv(output_name, index=False)
 
-
-def scale_b_b(df, output_name):
+def scale_b_b_train(df, output_name):
     # todo add description
     x_columns = [col for col in df.columns if col.endswith("_x")]
     y_columns = [col for col in df.columns if col.endswith("_y")]
@@ -386,6 +389,74 @@ def scale_b_b(df, output_name):
     df[y_columns] = (df[y_columns] - min_y.values.reshape(-1,
                                                           1)) / height.values.reshape(
         -1, 1)
+
+    df.to_csv(output_name, index=False)
+
+def scale_b_b_test(df, output_name, folder_name):
+    # todo add description
+    x_columns = [col for col in df.columns if col.endswith("_x")]
+    y_columns = [col for col in df.columns if col.endswith("_y")]
+    img_names = df.iloc[:, -1]
+    min_x_df = df[x_columns].where(df[x_columns] != 0).min(axis=1)
+    max_x_df = df[x_columns].max(axis=1)
+    min_y_df = df[y_columns].where(df[y_columns] != 0).min(axis=1)
+    max_y_df = df[y_columns].max(axis=1)
+    width = max_x_df - min_x_df
+    height = max_y_df - min_y_df
+
+    print(width, height)
+    df[x_columns] = (df[x_columns] - min_x_df.values.reshape(-1,
+                                                          1)) / width.values.reshape(
+        -1, 1)
+    df[y_columns] = (df[y_columns] - min_y_df.values.reshape(-1,
+                                                          1)) / height.values.reshape(
+        -1, 1)
+
+    image_folder_path = os.path.join(IMAGE_DIR, folder_name)
+    image_folder_path_cropped = os.path.join(IMAGE_DIR, f"{folder_name}_cropped")
+
+    if os.path.exists(image_folder_path_cropped):
+        shutil.rmtree(image_folder_path_cropped)
+    os.mkdir(image_folder_path_cropped)
+    for img_name, min_x, max_x, min_y, max_y in zip(img_names, min_x_df, max_x_df, min_y_df, max_y_df):
+        print(min_y, max_y, min_x, max_x)
+
+        img = cv2.imread(os.path.join(image_folder_path, f"{img_name}.jpg"))
+
+        height, width = img.shape[:2]
+
+        scale = 0.1
+
+        min_x = int(min_x * width)
+        max_x = int(max_x * width)
+        min_y = int(min_y * height)
+        max_y = int(max_y * height)
+        print("img name:", img_name)
+
+        print("before")
+        print(min_x, max_x, min_y, max_y)
+
+        padding_x = int(width * scale)
+        padding_y = int(height * scale)
+
+        min_x = min_x - padding_x
+        max_x = max_x + padding_x
+        min_y = min_y - padding_y
+        max_y = max_y + padding_y
+
+        min_x = max(0, min_x)
+        max_x = min(width, max_x)
+        min_y = max(0, min_y)
+        max_y = min(height, max_y)
+
+        print("after")
+        print(min_x, max_x, min_y, max_y)
+
+
+        im_cropped = img[min_y:max_y, min_x:max_x]
+        output_path = os.path.join(image_folder_path_cropped, f"{img_name}.jpg")
+        cv2.imwrite(output_path, im_cropped)
+
 
     df.to_csv(output_name, index=False)
 
@@ -441,7 +512,10 @@ def build_dataset(coordinates_folder_name, train=False):
 
     # 3. scale coordinates using bounding box
     df = pd.read_csv(csv_path)
-    scale_b_b(df, output_csv_scaled_b_b_path)
+    if train:
+        scale_b_b_train(df, output_csv_scaled_b_b_path)
+    else:
+        scale_b_b_test(df, output_csv_scaled_b_b_path, coordinates_folder_name)
 
     # 4. move the coordinates centre to the neck coordinate
     df = pd.read_csv(output_csv_scaled_b_b_path)

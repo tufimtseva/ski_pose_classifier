@@ -351,8 +351,8 @@ class SkiPoseClassifier:
 
         turn_phases = self.__classify_lstm(features)
 
-        print("Img names ", img_names)
-        print("turn_phases", turn_phases)
+        print("Img names len", len(img_names))
+        print("turn_phases len ", len(turn_phases))
 
         return self.__sort_by_turn_phases(img_names, turn_phases)
 
