@@ -11,6 +11,8 @@ import shutil
 
 
 JSON_DIR = "backend/data_preprocessing/json_data"
+JSON_TRAIN_DIR = "backend/data_preprocessing/train_json_data"
+JSON_DIR = "backend/data_preprocessing/json_data"
 CSV_DIR = "backend/data_preprocessing/csv_data"
 IMAGE_DIR = "backend/data_preprocessing/frames"
 
@@ -125,6 +127,7 @@ def get_csv_openpose_train(sorted_json_files, output_csv):
             labels = json.load(f)
             people = labels["people"]
             if len(people) != 0:
+                # print("Found {} people in {}".format(len(people), json_file))
                 pose_keypoints = labels["people"][0]["pose_keypoints_2d"]
                 coordinates = []
                 to_delete = False
@@ -147,6 +150,8 @@ def get_csv_openpose_train(sorted_json_files, output_csv):
 
                     coordinates.append(cropped_name)
                     all_data.append(coordinates)
+            else:
+                print("skipping {}".format(json_file))
 
     with open(output_csv, 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile)
@@ -431,10 +436,6 @@ def scale_b_b_test(df, output_name, folder_name):
         max_x = int(max_x * width)
         min_y = int(min_y * height)
         max_y = int(max_y * height)
-        print("img name:", img_name)
-
-        print("before")
-        print(min_x, max_x, min_y, max_y)
 
         padding_x = int(width * scale)
         padding_y = int(height * scale)
@@ -448,10 +449,6 @@ def scale_b_b_test(df, output_name, folder_name):
         max_x = min(width, max_x)
         min_y = max(0, min_y)
         max_y = min(height, max_y)
-
-        print("after")
-        print(min_x, max_x, min_y, max_y)
-
 
         im_cropped = img[min_y:max_y, min_x:max_x]
         output_path = os.path.join(image_folder_path_cropped, f"{img_name}.jpg")
@@ -491,7 +488,11 @@ def add_neck_knee_dist(df, output_folder, train=False):
 
 
 def build_dataset(coordinates_folder_name, train=False):
-    coordinates_path = os.path.join(JSON_DIR, coordinates_folder_name)
+    if train:
+        coordinates_path = os.path.join(JSON_TRAIN_DIR, coordinates_folder_name)
+    else:
+        coordinates_path = os.path.join(JSON_DIR, coordinates_folder_name)
+
     csv_path = os.path.join(CSV_DIR, f"{coordinates_folder_name}.csv")
 
     # 1. sort json files in numeric order to reconstruct the initial frames sequence

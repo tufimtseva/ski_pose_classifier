@@ -6,6 +6,9 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, \
 from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import RandomizedSearchCV
+from torch.nn import functional as F
+import keras
 
 import torch
 import torch.nn as nn
@@ -15,6 +18,8 @@ import torch.utils.data as data
 from torch.utils.data import DataLoader
 # todo check if needed keras
 from backend.ml_model.lstm_classifier import LSTMClassifier
+# from backend.ml_model.mlp_classifier import MLPClassifier
+
 
 class SkiPoseClassifier:
     def __init__(self, training_coordinates_path):
@@ -46,13 +51,14 @@ class SkiPoseClassifier:
         return X, img_names
     def __preprocess_training_data(self, shuffle):
         X, y, img_names = self.__load_data_train(self.training_coordinates_path)
-        X_train, X_test, y_train, y_test, img_names_train, img_names_test = train_test_split(
-            X, y, img_names, test_size=0.15, random_state=1, shuffle=shuffle)
         X_train, X_val, y_train, y_val, img_names_train, img_names_val = train_test_split(
-            X_train, y_train, img_names_train, test_size=0.176, random_state=1,
-            shuffle=shuffle)
+            X, y, img_names, test_size=0.15, random_state=1, shuffle=shuffle)
+        # X_train, X_val, y_train, y_val, img_names_train, img_names_val = train_test_split(
+        #     X_train, y_train, img_names_train, test_size=0.176, random_state=1,
+        #     shuffle=shuffle)
 
-        return np.array(X_train), np.array(y_train), np.array(X_val), np.array(y_val), np.array(X_test), np.array(y_test), np.array(img_names_train), np.array(img_names_val), np.array(img_names_test)
+        # return np.array(X_train), np.array(y_train), np.array(X_val), np.array(y_val), np.array(X_test), np.array(y_test), np.array(img_names_train), np.array(img_names_val), np.array(img_names_test)
+        return np.array(X_train), np.array(y_train), np.array(X_val), np.array(y_val), np.array(img_names_train), np.array(img_names_val)
 
     def __calculate_metrics(self, y_test, y_pred):
         accuracy = accuracy_score(y_test, y_pred)
@@ -64,13 +70,31 @@ class SkiPoseClassifier:
         print("Precision:", precision)
         print("Recall:", recall)
         print("F1 score:", f1_score_res)
+        return accuracy, precision, recall, f1_score_res
 
     def __train_mlp(self, X_train, y_train, X_val, y_val):
-        # todo add params search
         self.mlp = MLPClassifier()
         self.mlp.fit(X_train, y_train)
         y_pred = self.mlp.predict(X_val)
         self.__calculate_metrics(y_val, y_pred)
+
+        # param_dist = {
+        #     'hidden_layer_sizes': [(100,), (200,), (300,)],
+        #     'activation': ['relu', 'tanh'],
+        #     'alpha': [0.0001, 0.001, 0.01],
+        #     'learning_rate': ['constant', 'adaptive']
+        # }
+        #
+        # rand_search = RandomizedSearchCV(self.mlp, param_distributions=param_dist,
+        #                                  n_iter=10, cv=5)
+        # rand_search.fit(X_train, y_train)
+        #
+        # best_mlp = rand_search.best_estimator_
+        # y_pred = best_mlp.predict(X_val)
+        # accuracy = accuracy_score(y_val, y_pred)
+        # print(f"Accuracy after grid search: {accuracy:.2f}")
+        # print("Best hyperparameters:", rand_search.best_params_)
+        # self.mlp = best_mlp
 
         # cm = confusion_matrix(y_val, y_pred)
         # ConfusionMatrixDisplay(confusion_matrix=cm).plot()
@@ -99,7 +123,7 @@ class SkiPoseClassifier:
     #
     #     self.mlp = MLPClassifier().to(self.device)
     #     criterion = nn.CrossEntropyLoss()
-    #     optimizer = optim.Adam(self.mlp.parameters(), lr=0.001)
+    #     optimizer = torch.optim.Adam(self.mlp.parameters(), lr=0.001)
     #
     #     epochs = 70
     #     for epoch in range(epochs):
@@ -158,12 +182,13 @@ class SkiPoseClassifier:
         # print("Probabilities Shape:", probs.shape)
         # print("Log Probabilities Shape:", log_probs.shape)
         # return log_probs
+
     def __create_lstm_dataset_train(self, logits, labels, img_names, lookback):
         X, y = [], []
         target_img_names = []
         for i in range(len(logits) - lookback):
             inputs = logits[i: i + lookback]
-            target = labels[i + lookback]
+            target = labels[i + lookback - 1]
             target_img_names.append(img_names[i + lookback])
             X.append(inputs)
             y.append(target)
@@ -189,6 +214,7 @@ class SkiPoseClassifier:
         total_train_loss = 0
         train_correct, train_total = 0, 0
         val_logits = []
+        all_train_preds, all_train_labels = [], []
 
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(self.device).float(), labels.to(
@@ -201,15 +227,19 @@ class SkiPoseClassifier:
             pred_classes = preds.argmax(dim=1)
             train_correct += (pred_classes == labels).sum().item()
             train_total += labels.numel()
+            all_train_preds.extend(pred_classes.cpu().numpy())
+            all_train_labels.extend(labels.cpu().numpy())
 
             optimizer.step()
 
         train_loss = total_train_loss / train_total
         train_accuracy = train_correct / train_total
+        _, train_precision, train_recall, train_f1_score_res = self.__calculate_metrics(all_train_labels, all_train_preds)
 
         self.lstm.eval()
         total_val_loss = 0
         val_correct, val_total = 0, 0
+        all_val_preds, all_val_labels = [], []
         with torch.no_grad():
             for val_data in val_loader:
                 inputs, val_labels = val_data[0], val_data[1]
@@ -224,13 +254,17 @@ class SkiPoseClassifier:
                 pred_classes = val_preds.argmax(dim=1)
                 val_correct += (pred_classes == val_labels).sum().item()
                 val_total += val_labels.numel()
+                all_val_preds.extend(pred_classes.cpu().numpy())
+                all_val_labels.extend(val_labels.cpu().numpy())
 
         val_loss = total_val_loss / val_total
         val_accuracy = val_correct / val_total
-        return train_loss, train_accuracy, val_loss, val_accuracy
+        _, val_precision, val_recall, val_f1_score_res = self.__calculate_metrics(all_val_labels, all_val_preds)
+
+        return train_loss, train_accuracy, train_precision, train_recall, train_f1_score_res, val_loss, val_accuracy, val_precision, val_recall, val_f1_score_res
 
 
-    def __train_lstm(self, X_train, y_train, X_val, y_val, target_img_names_val):
+    def __train_lstm(self, X_train, y_train, X_val, y_val):
 
         self.lstm = LSTMClassifier(self.input_dim,  self.hidden_dim, self.num_layers, self.output_dim,
                                self.batch_size, self.device)
@@ -253,16 +287,16 @@ class SkiPoseClassifier:
         val_accuracies = []
 
         for epoch in range(epochs):
-            train_loss, train_accuracy, val_loss, val_accuracy = self.__train_epoch_lstm(train_loader, val_loader, optimizer, criterion)
+            train_loss, train_accuracy, train_precision, train_recall, train_f1, val_loss, val_accuracy, val_precision, val_recall, val_f1 = self.__train_epoch_lstm(train_loader, val_loader, optimizer, criterion)
             train_losses.append(train_loss)
             val_losses.append(val_loss)
             train_accuracies.append(train_accuracy)
             val_accuracies.append(val_accuracy)
             print(f"Epoch {epoch + 1}/{epochs}")
-            print(
-                f"Train Loss: {train_loss:.4f}, Train Accuracy: {train_accuracy * 100:.2f}%")
-            print(
-                f"Val Loss: {val_loss:.4f}, Val Accuracy: {val_accuracy * 100:.2f}%")
+            print(f"Train Loss: {train_loss:.4f}, Train Accuracy: {train_accuracy * 100:.2f}%")
+            print(f"Train Precision: {train_precision:.4f}, Train Recall: {train_recall:.4f}, Train F1: {train_f1:.4f}")
+            print(f"Val Loss: {val_loss:.4f}, Val Accuracy: {val_accuracy * 100:.2f}%")
+            print(f"Val Precision: {val_precision:.4f}, Val Recall: {val_recall:.4f}, Val F1: {val_f1:.4f}")
             print("=" * 40)
 
 
@@ -282,13 +316,15 @@ class SkiPoseClassifier:
 
 
     def train(self):
-        X_train, y_train, X_val, y_val, X_test, y_test, img_names_train, img_names_val, img_names_test = self.__preprocess_training_data(shuffle=True)
+        # X_train, y_train, X_val, y_val, X_test, y_test, img_names_train, img_names_val, img_names_test = self.__preprocess_training_data(shuffle=True)
+        # X_train, y_train, X_val, y_val, X_test, y_test, img_names_train, img_names_val, img_names_test = self.__preprocess_training_data(shuffle=False)
+        X_train, y_train, X_val, y_val, img_names_train, img_names_val = self.__preprocess_training_data(shuffle=False)
         self.__train_mlp(X_train, y_train, X_val, y_val)
 
         joblib.dump(self.mlp, self.mlp_path)
         print(f"MLP model saved to {self.mlp_path}")
 
-        X_train, y_train, X_val, y_val, X_test, y_test, img_names_train, img_names_val, img_names_test = self.__preprocess_training_data(shuffle=False)
+        X_train, y_train, X_val, y_val, img_names_train, img_names_val = self.__preprocess_training_data(shuffle=False)
         logits_train = self.__classify_mlp(X_train)
 
         features, targets, target_img_names = self.__create_lstm_dataset_train(
@@ -300,9 +336,9 @@ class SkiPoseClassifier:
         train_size = int(len(features) * 0.2)
         X_val, X_train = features[:train_size], features[train_size:]
         y_val, y_train = targets[:train_size], targets[train_size:]
-        target_img_names_val, target_img_names_train = target_img_names[:train_size], target_img_names[train_size:]
+        # target_img_names_val, target_img_names_train = target_img_names[:train_size], target_img_names[train_size:]
 
-        self.__train_lstm(X_train, y_train, X_val, y_val, target_img_names_val)
+        self.__train_lstm(X_train, y_train, X_val, y_val)
         torch.save(self.lstm.state_dict(), self.lstm_path)
         print(f"LSTM model saved to {self.lstm_path}")
 

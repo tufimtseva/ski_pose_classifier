@@ -5,12 +5,16 @@ import glob
 import shutil
 import threading
 
+from pandas.io.formats.info import frame_sub_kwargs
+
 api_bp = Blueprint("api", __name__)
 
 ALLOWED_EXTENSIONS = ["mp4", "mov", "mkv"] # todo check allowed extensions for ffmpeg
 VIDEO_DIR = "backend/data_preprocessing/videos"
 FRAMES_DIR = "backend/data_preprocessing/frames"
+FRAMES_TRAIN_DIR = "backend/data_preprocessing/train_frames"
 JSON_DIR = "backend/data_preprocessing/json_data"
+JSON_TRAIN_DIR = "backend/data_preprocessing/train_json_data"
 BATCH_SIZE = 10
 
 @api_bp.get('/')
@@ -129,3 +133,68 @@ def extract_keypoints(frames_path, output_json_path):
         shutil.rmtree(batch_folder)
 
     print(f"Extraction completed for: {frames_path}")
+
+
+
+@api_bp.post('/extract-keypoints-train')
+def start_keypoints_extraction_train():
+
+    frames_name = request.get_json()['frames_name']
+    print("frames name received ", frames_name)
+    frames_path = os.path.join(FRAMES_TRAIN_DIR, frames_name)
+    output_json_path = os.path.join(JSON_TRAIN_DIR, frames_name)
+
+    thread = threading.Thread(target=extract_keypoints_train, args=(frames_path, output_json_path))
+    thread.start()
+    return {'json_folder_name': frames_name}, 200
+
+
+
+def extract_keypoints_train(frames_path, output_json_path):
+    sh_script = "./backend/routes/openpose_runner.sh"
+
+    if os.path.exists(output_json_path):
+        shutil.rmtree(output_json_path)
+    os.makedirs(output_json_path, exist_ok=True)
+    print("output_json_path created")
+
+    for subfolder in ['left', 'right', 'middle']:
+        frames_subfolder_path = os.path.join(frames_path, subfolder)
+        json_subfolder_path = os.path.join(output_json_path, subfolder)
+        if os.path.exists(frames_subfolder_path):
+
+            image_files = sorted(glob.glob(os.path.join(frames_subfolder_path, "*.jpg")) +
+                                 glob.glob(os.path.join(frames_subfolder_path, "*.png")))
+            print("image_files", image_files)
+
+            if not image_files:
+                return {'error': 'No images found in the directory'}, 400
+
+            for i in range(0, len(image_files), BATCH_SIZE):
+                batch_images = image_files[i:i + BATCH_SIZE]
+                print(f"Processing batch {i//BATCH_SIZE + 1}: {len(batch_images)} images")
+
+                batch_folder = os.path.join(frames_subfolder_path, f"batch_{i//BATCH_SIZE}")
+                os.makedirs(batch_folder, exist_ok=True)
+
+                for img in batch_images:
+                    shutil.copy(img, batch_folder)
+
+                batch_json_folder = os.path.join(json_subfolder_path, f"batch_{i//BATCH_SIZE}")
+                os.makedirs(batch_json_folder, exist_ok=True)
+
+                args = [sh_script, batch_folder, batch_json_folder]
+                try:
+                    subprocess.run(args, check=True)
+                except subprocess.CalledProcessError as e:
+                    return {'errors': [f'Error during script execution: {str(e)}']}, 500
+                shutil.rmtree(batch_folder)
+
+            all_json_files = glob.glob(os.path.join(json_subfolder_path,  "batch_*", "*.json"))
+            for json_file in all_json_files:
+                shutil.move(json_file, json_subfolder_path)
+
+            for batch_folder in glob.glob(os.path.join(json_subfolder_path, "batch_*")):
+                shutil.rmtree(batch_folder)
+
+            print(f"Extraction completed for: {frames_subfolder_path}")

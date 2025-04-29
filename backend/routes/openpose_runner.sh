@@ -15,4 +15,4 @@ echo "./backend/bin/mac/silicon/openpose.bin --image_dir \"$IMAGE_DIR\" --write_
   --write_json "$WRITE_JSON" \
   --model_folder "./openpose/models/" \
   --number_people_max 1 --keypoint_scale 3 \
-  --render_pose 0 --display 0
+  --render_pose 0 --display 0 --maximize_positives
