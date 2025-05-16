@@ -7,8 +7,12 @@ import numpy as np
 import cv2
 from PIL import Image
 import shutil
+from sklearn.model_selection import train_test_split
+from torch.utils.data import Subset
+from torchvision.models import EfficientNet_B4_Weights
+from torch.utils.data import DataLoader
 
-
+from backend.data_preprocessing.image_dataset import ImageDataset
 
 JSON_DIR = "backend/data_preprocessing/json_data"
 JSON_TRAIN_DIR = "backend/data_preprocessing/train_json_data"
@@ -487,7 +491,7 @@ def add_neck_knee_dist(df, output_folder, train=False):
     df.to_csv(output_folder, index=False)
 
 
-def build_dataset(coordinates_folder_name, train=False):
+def build_dataset_coordinates(coordinates_folder_name, train=False):
     if train:
         coordinates_path = os.path.join(JSON_TRAIN_DIR, coordinates_folder_name)
     else:
@@ -528,6 +532,15 @@ def build_dataset(coordinates_folder_name, train=False):
     return output_csv_scaled_b_b_neck_knee_dist_path
 
 
+def build_dataset_images(image_folder_name, shuffle):
+    # image_folder_name ='drive/MyDrive/ski_pose_classifier/gs_training_fps10_sorted'
+    transform = EfficientNet_B4_Weights.IMAGENET1K_V1.transforms()
+    batch_size = 8
+    dataset = ImageDataset(img_dir=image_folder_name, transform=transform)
+    img_names = dataset.get_img_names()
+    # label_encoder = dataset.get_label_encoder()
+    data_loader = DataLoader(dataset, batch_size, shuffle=shuffle)
+    return data_loader, img_names
     # DRAFT
     # STEPS
 

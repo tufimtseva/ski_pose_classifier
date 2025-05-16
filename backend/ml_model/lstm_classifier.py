@@ -17,7 +17,8 @@ class LSTMClassifier(nn.Module):
         self.dropout = nn.Dropout(0.3)
 
     def forward(self, x):
-        hidden = self.init_hidden(self.batch_size)
+        batch_size = x.size(0)
+        hidden = self.init_hidden(batch_size)
         lstm_out, hidden = self.lstm(x, hidden)
         lstm_out = lstm_out[:, -1, :]
         lstm_out = self.dropout(lstm_out)

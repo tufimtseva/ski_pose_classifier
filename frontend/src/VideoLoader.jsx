@@ -7,24 +7,24 @@ const VideoLoader = () => {
     const [uploadError, setUploadError] = useState(null)
 
 
-    const marks = [
-        {
-            value: 2,
-            label: '2 fps',
-        },
-        {
-            value: 5,
-            label: '5 fps',
-        },
-        {
-            value: 8,
-            label: '8 fps',
-        },
-        {
-            value: 10,
-            label: '10 fps',
-        }
-    ];
+    // const marks = [
+    //     {
+    //         value: 2,
+    //         label: '2 fps',
+    //     },
+    //     {
+    //         value: 5,
+    //         label: '5 fps',
+    //     },
+    //     {
+    //         value: 8,
+    //         label: '8 fps',
+    //     },
+    //     {
+    //         value: 10,
+    //         label: '10 fps',
+    //     }
+    // ];
 
 
     const handleUploading = () => {
