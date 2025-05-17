@@ -19,6 +19,13 @@ const colors = {
     Right: '#2ca02c', // green
 };
 
+const getTimeTicks = (data) => {
+    return data
+        .map(d => d.time)
+        .filter((t, i, arr) => parseFloat(t) % 0.5 === 0);
+};
+
+
 const transformProbabilities = (probs, fps) => {
     return probs.map((frameProbs, index) => ({
         frame: index,
@@ -34,7 +41,7 @@ const ProbabilityPlotPage = () => {
     const probabilities = location.state.probabilities;
     const jsonFolderName = location.state.jsonFolderName;
     const [data, setData] = useState([]);
-    const fps = 3;
+    const fps = 10;
 
     useEffect(() => {
         if (probabilities) {
@@ -43,7 +50,6 @@ const ProbabilityPlotPage = () => {
             setData(transformed);
         }
     }, [probabilities]);
-
 
     return (
         <div style={{width: 400}}>
@@ -59,7 +65,7 @@ const ProbabilityPlotPage = () => {
                         <Label value="Probability" position="insideBottom"
                                offset={-5}/>
                     </XAxis>
-                    <YAxis type="category" dataKey="time" interval={0}>
+                    <YAxis type="category" dataKey="time" interval={0} ticks={getTimeTicks(data)}>
                         <Label value="Time (s)" angle={-90}
                                position="insideLeft"/>
                     </YAxis>

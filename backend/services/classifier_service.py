@@ -1,5 +1,5 @@
 from backend.data_preprocessing import dataset_builder
-from backend.ml_model.model_training import SkiPoseClassifierCoordinates, SkiPoseClassifierImages
+from backend.ml_model.classifier_pipeline import SkiPoseClassifierCoordinates, SkiPoseClassifierImages
 
 
 class ClassifierServiceCoordinates:
